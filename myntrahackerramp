@@ -1,0 +1,849 @@
+import os
+from tkinter import messagebox
+from tkinter import *
+from tkinter import simpledialog
+import tkinter
+from tkinter import filedialog
+import time
+import nltk
+nltk.download('stopwords')
+import cv2
+from dotenv import load_dotenv
+import matplotlib.pyplot as plt
+from statsmodels.graphics.tsaplots import plot_pacf,plot_acf
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import tensorflow as tf
+from pmdarima import auto_arima
+from statsmodels.tsa.arima.model import ARIMA
+from tkinter.filedialog import askopenfilename
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt2
+from sklearn.metrics import classification_report, confusion_matrix
+from textblob import TextBlob
+from wordcloud import WordCloud, STOPWORDS
+from nltk.tokenize import sent_tokenize, word_tokenize
+import nltk.classify.util
+import string
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.sentiment.util import *
+from nltk.stem.porter import PorterStemmer
+from string import punctuation
+from nltk.corpus import stopwords
+main = tkinter.Tk()
+main.title("OPTIMIZE INVENTORY TREND-DEMAND FORECASTING MANAGEMENT SYSTEM")
+main.geometry("1300x1200")
+
+global reviewsfilename
+global clothdata
+Review_Text_list = []
+clean_list = []
+global pos, neu, neg
+
+def tweetCleaning(doc):
+    tokens = doc.split()
+    table = str.maketrans('', '', punctuation)
+    tokens = [w.translate(table) for w in tokens]
+    tokens = [word for word in tokens if word.isalpha()]
+    stop_words = set(stopwords.words('english'))
+    tokens = [w for w in tokens if not w in stop_words]
+    tokens = [word for word in tokens if len(word) > 1]
+    tokens = ' '.join(tokens) #here upto for word based
+    return tokens
+
+def upload():
+    global reviewsfilename
+    text.delete('1.0', END)
+    reviewsfilename = askopenfilename(initialdir="Myntra-Data")
+    text.insert(END, "\n")
+    text.insert(END, reviewsfilename)
+    text.insert(END, "   Dataset loaded\n\n")
+    clothing = pd.read_csv(reviewsfilename, index_col=0)
+    text.insert(END, "\n")
+    text.insert(END, clothing.shape)
+    text.insert(END, "\n")
+    text.insert(END, clothing.head(5))
+    text.insert(END, "\n")
+    #  Checking for Missing Values
+    clothing.isnull().values.any()
+
+    clothing.isnull().sum()
+
+    sns.set(rc={'figure.figsize': (11, 5)})
+    plt.hist(clothing.Age, bins=40)
+    plt.xlabel('Age')
+    plt.ylabel('Reviews')
+    plt.title('Number of Reviews per Age');
+    pic1='Myntra-Data/Number of Reviews per Age' + ".jpg"
+    plt.savefig(pic1)
+
+    sns.set(rc={'figure.figsize': (11, 6)})
+    sns.boxplot(x='Rating', y='Age', data=clothing)
+    plt.title('Rating Distribution per Age');
+    pic2 = 'Myntra-Data/Rating Distribution per Age' + ".jpg"
+    plt.savefig(pic2)
+
+    z = clothing.groupby(by=['Department Name'], as_index=False).count().sort_values(by='Class Name', ascending=False)
+
+    plt.figure(figsize=(10, 10))
+    sns.set_style("whitegrid")
+    ax = sns.barplot(x=z['Department Name'], y=z['Class Name'], data=z)
+    plt.xlabel("Department Name")
+    plt.ylabel("Count")
+    plt.title("Counts Vs Department Name")
+    pic3 = 'Myntra-Data/Counts Vs Department Name' + ".jpg"
+    plt.savefig(pic3)
+    w = clothing.groupby(by=['Division Name'], as_index=False).count().sort_values(by='Class Name', ascending=False)
+
+    plt.figure(figsize=(10, 10))
+    sns.set_style("whitegrid")
+    ax = sns.barplot(x=w['Division Name'], y=w['Class Name'], data=w)
+    plt.xlabel("Division Name")
+    plt.ylabel("Count")
+    plt.title("Counts Vs Division Name")
+    pic4= 'Myntra-Data/Counts Vs Division Name' + ".jpg"
+    plt.savefig(pic4)
+    #  The Product Rating Distribution
+    plt.figure(figsize=(14, 5))
+    ax = sns.countplot(x='Rating', data=clothing)
+    ax.set_title("Distribution of Ratings", fontsize=14)
+
+    x = clothing['Rating'].value_counts()
+
+    rects = ax.patches
+    labels = x.values
+    for rect, label in zip(rects, labels):
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width() / 2, height + 5, label, ha='center', va='bottom')
+
+    h = clothing["Rating"].value_counts()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    plt.bar(clothing["Rating"].unique(), h)
+    plt.xlabel("Rating")
+    plt.ylabel("Counts")
+    plt.title("Histogram of Ratings")
+    plt.figure(figsize=(8, 4))
+    ax.grid(True)
+    plt.rcParams['axes.axisbelow'] = True
+
+    #  Number of Reviews per Product Category
+    plt.figure(figsize=(14, 5))
+    ax = sns.countplot(x='Department Name', data=clothing, order=clothing['Department Name'].value_counts().index)
+    ax.set_title("Reviews per Department", fontsize=14)
+    ax.set_ylabel("# of Reviews", fontsize=12)
+    ax.set_xlabel("Department", fontsize=12)
+
+    x = clothing['Department Name'].value_counts()
+
+    rects = ax.patches
+    labels = x.values
+    for rect, label in zip(rects, labels):
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width() / 2, height + 5, label, ha='center', va='bottom')
+
+    sns.set(rc={'figure.figsize': (11, 6)})
+    sns.boxplot(x='Rating', y='Age', data=clothing)
+    plt.title('Rating Distribution per Age');
+    pic5 = 'Myntra-Data/Rating Distribution per Age' + ".jpg"
+    plt.savefig(pic5)
+    # The Most Popular Item
+    fig = plt.figure(figsize=(14, 9))
+    plt.xticks(rotation=45)
+    plt.xlabel('Item ID')
+    plt.ylabel('Popularity')
+    plt.title("Top 50 Popular Items")
+    clothing['Clothing ID'].value_counts()[:50].plot(kind='bar');
+    pic6 = 'Myntra-Data/Top 50 Popular Items' + ".jpg"
+    plt.savefig(pic6)
+    #  Correlation Plot of Department,Division and Class Against Each Other
+    sns.heatmap(pd.crosstab(clothing['Class Name'],
+                            clothing["Department Name"]),
+                annot=True, fmt='g', cmap="Pastel2_r")
+    plt.title("Class Name Count Vs Department Name", fontsize=20, fontweight='bold')
+
+
+    sns.heatmap(pd.crosstab(clothing['Class Name'], clothing["Division Name"]),
+                annot=True, fmt='g', cmap="Pastel1")
+    plt.title("Class Name Count Vs Division Name", fontsize=20, fontweight='bold')
+
+
+
+    sns.heatmap(pd.crosstab(clothing['Department Name'], clothing["Division Name"]),
+                annot=True, fmt='g', cmap="Pastel1_r")
+    plt.title("Department Name Count Vs Division Name", fontsize=20, fontweight='bold')
+
+
+
+    #  The Amount of Missing Values per Feature
+    sns.set(rc={'figure.figsize': (11, 4)})
+    pd.isnull(clothing).sum().plot(kind='bar')
+    plt.ylabel('Number of Missing Values')
+    plt.title('Missing Values per Feature');
+
+    clothing.dropna(subset=['Review Text'], inplace=True)
+
+    clothing.loc[(clothing.Rating == 1) & (clothing['Recommended IND'] == 1)]['Review Text'].iloc[1]
+
+    clothing.loc[(clothing.Rating == 5) & (clothing['Recommended IND'] == 0)]['Review Text'].iloc[1]
+    text.insert(END, "   Myntra product reviews added successfully!\n\n")
+
+def Preprocessing():
+    text.delete('1.0', END)
+    text.insert(END, "Data Preprocessing is started...\n")
+    df= pd.read_csv(clothdata,encoding='iso-8859-1')
+    text.insert(END, "\n")
+    text.insert(END, df.head(10))
+    text.insert(END, "\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, "Identify missing values:\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, df.isna().sum())
+    text.insert(END, "\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, "Drop missing values:\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, df.dropna(axis=1))
+    text.insert(END, "\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, "Replace missing values:\n")
+    text.insert(END, "------------------------\n")
+    text.insert(END, df.dtypes)
+    text.insert(END, "\n")
+def clothsSalesData():
+    global clothdata
+    text.delete('1.0', END)
+    clothdata = askopenfilename(initialdir="Myntra-Data")
+    text.insert(END, "\n")
+    text.insert(END, clothdata)
+    text.insert(END, "   Dataset loaded\n\n")
+    text.insert(END, "Loading Myntra Cloth Items....")
+    df = pd.read_csv(clothdata)
+
+    """### 1. Checking Null Values"""
+
+    df.isnull().sum()
+
+    """### 2. Remove Columns that are not in use"""
+
+    del df['product_link']
+    del df['img_link']
+    del df['meta_keyword']
+    del df['meta_description']
+
+    text.insert(END, "\n")
+    text.insert(END, df.head())
+    text.insert(END, "\n")
+
+    """### 3. Data Analysis - Numeric Column
+
+    ###### Average rating of a product (non zero)
+    """
+
+    rat = 0
+    c = 0
+
+    for i in df['rating']:
+
+        if (i != 0.0):
+            rat += i
+            c += 1
+
+    print(round(int(rat) / c, 2))
+    text.insert(END, "\n")
+    text.insert(END, "-------------------------------------\n")
+    text.insert(END, "Most Expensive Product (Marked Price)\n")
+    text.insert(END, "-------------------------------------\n")
+    text.insert(END, df[df['marked_price'] == df['marked_price'].max()])
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "-----------------------------------------\n")
+    text.insert(END, "Most Expensive Product (Discounted Price)\n")
+    text.insert(END, "-----------------------------------------\n")
+    text.insert(END, df[df['discounted_price'] == df['discounted_price'].max()])
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "-------------------------------------\n")
+    text.insert(END, "Most Discounted Product (Percentage)\n")
+    text.insert(END, "-------------------------------------\n")
+    text.insert(END, df[df['discount_percent'] == df['discount_percent'].max()])
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "----------------------------------------\n")
+    text.insert(END, "Most Discounted Product (Disount Amount)\n")
+    text.insert(END, "----------------------------------------\n")
+    text.insert(END, df[df['discount_amount'] == df['discount_amount'].max()])
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "-----------------------------------------------\n")
+    text.insert(END, "Shortlisting Products based on specific filters\n")
+    text.insert(END, "-----------------------------------------------\n")
+
+    df_pr = df[df['discounted_price'] > 2000]
+    df_pr = df_pr[df_pr['discounted_price'] < 3000]
+    df_pr = df_pr[df_pr['product_tag'] == 'handbags']
+    text.insert(END, df_pr.sort_values(by='discount_percent', ascending=False).head(10))
+    text.insert(END, "\n")
+
+    text.insert(END, "\n")
+    text.insert(END, "---------------------------\n")
+    text.insert(END, "Finding all the brand names\n")
+    text.insert(END, "---------------------------\n")
+    text.insert(END, df['brand_name'].unique())
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "------------------------------------------------------\n")
+    text.insert(END, "Finding the top 10 Brands with most number of products\n")
+    text.insert(END, "------------------------------------------------------\n")
+
+
+    data = []
+
+    for brand_name in df['brand_name'].unique():
+
+        c = 0
+        for i in df['brand_name']:
+            if (i == brand_name):
+                c += 1
+
+        data.append([brand_name, c])
+
+    data = pd.DataFrame(data, columns=['name', 'products'])
+    text.insert(END, data.sort_values(by='products', ascending=False).head(10))
+    text.insert(END, "\n")
+    text.insert(END, "\n")
+    text.insert(END, "-------------------------------------------------------\n")
+    text.insert(END, "Finding the top 10 Most Expensive Brands (Marked Price)\n")
+    text.insert(END, "-------------------------------------------------------\n")
+    text.insert(END,df.groupby('brand_name').mean()['marked_price'].sort_values(ascending=False).head(10))
+    text.insert(END, "\n")
+    text.insert(END, df.groupby('brand_name').mean()['discount_percent'].sort_values(ascending=False).head(10))
+    text.insert(END, "\n")
+    text.insert(END, df.groupby('brand_name').mean()['discount_percent'].sort_values(ascending=True).head(10))
+    text.insert(END, "\n")
+
+    text.insert(END, "\n")
+    df_pr = df[df['rating'] != 0]
+    text.insert(END, "-----------------------------------------\n")
+    text.insert(END, "Finding all the brand names with Ratings.\n")
+    text.insert(END, "-----------------------------------------\n")
+    text.insert(END, df_pr.groupby('brand_name').mean()['rating'].sort_values(ascending=False))
+    text.insert(END, "\n")
+
+    text.insert(END, "\n")
+    df_pr = df[df['rating_count'] != 0]
+    text.insert(END, "-----------------------------------------------\n")
+    text.insert(END, "Finding all the brand names with Ratings Count.\n")
+    text.insert(END, "-----------------------------------------------\n")
+    text.insert(END, df_pr.groupby('brand_name').mean()['rating_count'].sort_values(ascending=False))
+    text.insert(END, "\n")
+
+
+    import numpy as np
+
+    pincode = []
+    state = []
+
+    for i in df['seller_address']:
+
+        if (i != 'Not Mentioned'):
+
+            pincode.append(i.split(' ')[-1])
+            state.append(i.split(',')[-1].split('-')[0].strip())
+
+        else:
+
+            pincode.append(np.nan)
+            state.append(np.nan)
+
+    df['pincode'] = pincode
+    df['state'] = state
+
+    df.head()
+
+    df.groupby('pincode').size().sort_values(ascending=False).head(5)
+
+    df.groupby('state').size().sort_values(ascending=False).head(5)
+
+
+load_dotenv()
+Filename_address ="Myntra-Data/ClothSales.csv"
+Output_address = "future-demand-price/"
+close = "Adj_Close"
+lag = 1
+epochs = 2
+learning_rate = 0.6
+batch_size = 32
+number_nodes = 10
+days = 6
+n = 20
+
+
+# Basically loading the data and making a data-frame wrt to time.
+def data_loader():
+    cols = ["Open", "High", "Low", "Close", "Adj_Close", "Volume"]
+    data = pd.read_csv(Filename_address, index_col="Date", parse_dates=True)
+    data.columns = cols
+    data = data.dropna()
+    print(f"The Shape of the Data-Set is : {data.shape}\nThe Data-Set is : \n{data.head()}\n")
+    return data
+
+
+# Plotting Line Graph with data and column name
+def plot_predictions(train, predictions, title):
+    plt.figure(figsize=(10, 5))
+    plt.plot(train.index, train, label='Actual')
+    plt.plot(train.index, predictions, label='Predicted', color='red')
+    plt.title(title)
+    plt.xlabel('Date')
+    plt.ylabel('Close-Price')
+    address = Output_address + title + ".jpg"
+    plt.savefig(address)
+
+
+def plot_raw_data(data):
+    plt.figure(figsize=(10, 5))
+    plt.plot(data.index, data[close], label='Close Price')
+    plt.title('Raw Time Series Data')
+    plt.xlabel('Date')
+    plt.ylabel('Close Price')
+    plt.legend()
+    address = Output_address + 'Raw Time Series Data' + ".jpg"
+    plt.savefig(address)
+
+
+def plot_train_test(train, test):
+    plt.figure(figsize=(10, 5))
+    plt.plot(train.index, train, label='Train Set')
+    plt.plot(test.index, test, label='Test Set', color='orange')
+    plt.title('Train and Test Data')
+    plt.xlabel('Date')
+    plt.ylabel('Close Price')
+    address = Output_address + 'Train and Test Data' + ".jpg"
+    plt.savefig(address)
+
+
+def plot_prediction_errors(errors):
+    plt.figure(figsize=(10, 5))
+    plt.plot(errors, label='Prediction Errors')
+    plt.title('Prediction Errors over Time')
+    plt.xlabel('Time Step')
+    plt.ylabel('Error')
+    plt.legend()
+    address = Output_address + 'Prediction Errors over Time' + ".jpg"
+    plt.savefig(address)
+
+
+def plot_final_predictions(test, final_predictions):
+    plt.figure(figsize=(10, 5))
+    plt.plot(test.index, test, label='Actual')
+    plt.plot(test.index, final_predictions, label='Corrected Prediction', color='green')
+    plt.title('Final Predictions with Error Correction')
+    plt.xlabel('Date')
+    plt.ylabel('Close Price')
+    plt.legend()
+    address = Output_address + 'Final Predictions with Error Correction' + ".jpg"
+    plt.savefig(address)
+
+
+def plot_accuracy(mse, rmse, mae):
+    metrics = ['MSE', 'RMSE', 'MAE']
+    values = [mse, rmse, mae]
+    plt.figure(figsize=(10, 5))
+    plt.bar(metrics, values, color=['blue', 'orange', 'green'])
+    plt.title('Model Accuracy Metrics')
+    address = Output_address + 'Model Accuracy Metrics' + ".jpg"
+    plt.savefig(address)
+
+
+def plot_arima_accuracy(mse, rmse, mae):
+    metrics = ['MSE', 'RMSE', 'MAE']
+    values = [mse, rmse, mae]
+    plt.figure(figsize=(10, 5))
+    plt.bar(metrics, values, color=['blue', 'orange', 'green'])
+    plt.title('ARIMA Model Accuracy Metrics')
+    address = Output_address + 'Model Accuracy Metrics' + ".jpg"
+    plt.savefig(address)
+
+
+# Data Partination For my model development and training.
+def data_allocation(data):
+    train_len_val = len(data) - days
+    train, test = data[close].iloc[0:train_len_val], data[close].iloc[train_len_val:]
+    print("\n--------------------------------- The Training Set is : -------------------------------------------\n")
+    print(train)
+    print(f"\nThe Number of Enteries : {len(train)}\n")
+    print("\n--------------------------------- The Testing Set is : --------------------------------------------\n")
+    print(test)
+    print(f"\nThe Number of Enteries : {len(test)}\n")
+    return train, test
+
+
+# Here we are Transforming the data for the Neural Network in a lag based matrix (nth:matrix).
+def apply_transform(data, n: int):
+    middle_data = []
+    target_data = []
+    for i in range(n, len(data)):
+        input_sequence = data[i - n:i]
+        middle_data.append(input_sequence)
+        target_data.append(data[i])
+    middle_data = np.array(middle_data).reshape((len(middle_data), n, 1))
+    target_data = np.array(target_data)
+    return middle_data, target_data
+
+
+# This the LSTM model training Function
+def LSTM(train, n: int, number_nodes, learning_rate, epochs, batch_size):
+    middle_data, target_data = apply_transform(train, n)
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input((n, 1)),
+        tf.keras.layers.LSTM(number_nodes, input_shape=(n, 1)),
+        tf.keras.layers.Dense(units=number_nodes, activation="relu"),
+        tf.keras.layers.Dense(units=number_nodes, activation="relu"),
+        tf.keras.layers.Dense(1)
+    ])
+    model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate), metrics=["mean_absolute_error"])
+    print(f"middle_data shape: {middle_data.shape}")
+    print(f"target_data shape: {target_data.shape}")
+    print(f"LSTM input shape: {model.layers[0].input_shape}")
+    history = model.fit(middle_data, target_data, epochs=epochs, batch_size=batch_size, verbose=0)
+    full_predictions = model.predict(middle_data).flatten()
+    return model, history, full_predictions
+
+
+# Calculating Accuracy of the Both the Models
+def calculate_accuracy(true_values, predictions):
+    mse = mean_squared_error(true_values, predictions)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(true_values, predictions)
+    return mse, rmse, mae
+
+
+# Error Evaluation from the Prediction made from LSTM Model.
+def Error_Evaluation(train_data, predict_train_data, n: int):
+    errors = []
+    for i in range(len(predict_train_data)):
+        err = train_data[n + i] - predict_train_data[i]
+        errors.append(err)
+    return errors
+
+
+# ARIMA Parameter Selection and PACF & ACF
+def Parameter_calculation(data):
+    finding = auto_arima(data, trace=True)
+    plot_acf(data, lags=lag)
+    address = Output_address + "ACF" + ".jpg"
+    plt.savefig(address)
+    plot_pacf(data, lags=lag)
+    address = Output_address + "PACF" + ".jpg"
+    plt.savefig(address)
+    ord = finding.order
+    return ord
+
+
+# ARIMA Model Function for Predicting the possible ERRORS from LSTM Model.
+def ARIMA_Model(train, len_test, ord):
+    model = ARIMA(train, order=ord)
+    model = model.fit()
+    predictions = model.predict(start=len(train), end=len(train) + len_test, type='levels')
+    full_predictions = model.predict(start=0, end=len(train) - 1, type='levels')
+    return model, predictions, full_predictions
+
+
+# The Final Prediction : LSTM predicted value + ARIMA predicted Error value
+def Final_Predictions(predictions_errors, predictions):
+    final_values = []
+    for i in range(days):
+        final_values.append(predictions_errors[i] + predictions[i])
+    return final_values
+
+
+# Main Function
+def LSTMandARIMAModels():
+    data = data_loader()
+    plot_raw_data(data)
+    train, test = data_allocation(data)
+    plot_train_test(train, test)
+    print(f"Enter the Lag Value for the Neural Network to Work : {n}\n")
+    # LSTM Model
+    st1 = time.time()
+    model, history, full_predictions = LSTM(train, n, number_nodes, learning_rate, epochs, batch_size)
+    plot_predictions(train[n:], full_predictions, "LSTM PREDICTIONS VS ACTUAL Values For TRAIN Data Set")
+    last_sequence = train[-n:].values.reshape((1, n, 1))
+    predictions = []
+    for i in range(days + 1):
+        next_prediction = model.predict(last_sequence).flatten()[0]
+        predictions.append(next_prediction)
+        if i < len(test):
+            actual_value = test.iloc[i]
+            new_row = np.append(last_sequence[:, 1:, :], np.array([[[actual_value]]]), axis=1)
+        else:
+            new_row = np.append(last_sequence[:, 1:, :], np.array([[[next_prediction]]]), axis=1)
+        last_sequence = new_row.reshape((1, n, 1))
+    plot_predictions(test, predictions[:-1], "LSTM Predictions VS Actual Values")
+    errors_data = Error_Evaluation(train, full_predictions, n)
+    plot_prediction_errors(errors_data)
+    print(
+        f"\n\n----------------------------- THE {days} PREDICTION VALUES FROM LSTM ---------------------------------------------------\n\n")
+    for i in range(days):
+        actual_value = test.iloc[i] if i < len(test) else "No actual value (out of range)"
+        print(f"Day {i + 1} => ACTUAL VALUE : {actual_value} | PREDICTED VALUE : {predictions[i]}\n")
+    print("\n---------------------------- The LSTM Model Summary is : ----------------------------\n")
+    print(model.summary())
+    mse, rmse, mae = calculate_accuracy(test[:days], predictions[:days])
+    plot_accuracy(mse, rmse, mae)
+    print("\n----------------------------- LSTM MODEL ACCURACY -----------------------------\n")
+    print(f"\nMEAN SQUARED ERROR : {mse}\nROOT MEAN SQUARED ERROR : {rmse}\nMEAN ABSOLUTE ERROR : {mae}\n\n")
+
+    ord = Parameter_calculation(errors_data)
+    Arima_Model, predictions_errors, full_predictions_errors = ARIMA_Model(errors_data, len(test), ord)
+    print(f"\n\n---------------------------- ARIMA MODEL {days} Predictions-------------------------\n\n")
+    for i in range(len(predictions_errors)):
+        print(f"{i + 1} : {predictions_errors[i]}\n")
+    print("\n---------------------------- ARIMA MODEL Summary -------------------------\n")
+    print(Arima_Model.summary())
+    arima_mse, arima_rmse, arima_mae = calculate_accuracy(errors_data, full_predictions_errors)
+    plot_arima_accuracy(arima_mse, arima_rmse, arima_mae)
+
+    print("\n\n--------------------------- FINAL PREDICTIONS ---------------------------------\n\n")
+    final_predictions = Final_Predictions(predictions_errors, predictions)
+    plot_final_predictions(test[:days], final_predictions[:days])
+    for i in range(days):
+        actual_value = test.iloc[i] if i < len(test) else "No actual value (out of range)"
+        print(f"Day {i + 1} => ACTUAL VALUE : {actual_value} | PREDICTED VALUE : {final_predictions[i]}\n")
+
+    print(
+        "\n---------------- Difference Between the LSTM Predictions and Final Predictions of {days} days ----------------\n")
+    for i in range(days):
+        actual_value = test.iloc[i] if i < len(test) else "No actual value (out of range)"
+        print(
+            f"\n{i} DAY => ACTUAL VALUE : {actual_value} | LSTM PREDICTED VALUE : {predictions[i]} | FINAL PREDICTION(LSTM + ARIMA) : {final_predictions[i]}\n")
+
+    print(f"\n\n---------------- The FORECAST VALUE OF NEXT DATA POINT IS ------------------ \n\n")
+    print(predictions[days] + predictions_errors[days])
+    end1 = time.time()
+    print(f"\n\nTime taken for model training and predictions: {end1 - st1:.2f} seconds\n\n")
+
+    with open(os.path.join(Output_address, "output.txt"), "w+") as file:
+        file.write("\n---------------- LSTM MODEL ----------------\n")
+        file.write(f"The Lags Used is : {lag}\n\n")
+        file.write(f"The EPOCHS is  : {epochs}\n\n")
+        file.write(f"The Learning-Rate of the LSMT Model is : {learning_rate}\n\n")
+        file.write(f"The Batch-Size of the LSMT Model is : {batch_size}\n\n")
+        file.write(f"The Number of Nodes of the LSMT Model is  : {number_nodes}\n\n")
+        file.write(f"The Lag Value for the Neural Network to Work : {n}\n\n")
+        file.write(
+            "\n---------------------- FULL PREDICTIONS OF THE TRAIN DATA (FIRST 100 points) FROM LSTM MODEL -------------------------\n")
+        for i in range(100):
+            file.write(f"{i} => ACTUAL DATA POINT : {train[i]} | PREDICTED DATA POINT : {full_predictions[i]}\n")
+        file.write(f"LMST Model Summary : \n{model.summary()}\n\n")
+        file.write(f"LMST HISTORY OF THE MODEL : \n{history}\n\n")
+        file.write(f"LMST Model Mean Squared Error : {mse}\n\n")
+        file.write(f"LMST Model Root Mean Squared Error : {rmse}\n\n")
+        file.write(f"LMST Model Mean Absolute Error : {mae}\n\n")
+        file.write(
+            f"----------------------------- THE {days} PREDICTION VALUES of LSMT MODEL -----------------------------------\n\n")
+        for i, (actual, pred) in enumerate(zip(test[:days], predictions[:days])):
+            file.write(f"Day {i + 1} => ACTUAL VALUE: {actual} | PREDICTED VALUE: {pred}\n\n")
+        file.write("\n---------------------------- ARIMA MODEL Summary -------------------------\n")
+        file.write(Arima_Model.summary().as_text())
+        file.write(f"\n\n---------------------------- ARIMA MODEL {days} Predictions-------------------------\n\n")
+        for i in range(len(predictions_errors)):
+            file.write(f"{i} : {predictions_errors[i]}\n")
+        file.write("\n\n--------------------------- FINAL PREDICTIONS ---------------------------------\n\n")
+        for i in range(days):
+            actual_value = test.iloc[i] if i < len(test) else "No actual value (out of range)"
+            file.write(f"\nDay {i + 1} => ACTUAL VALUE : {actual_value} | PREDICTED VALUE : {final_predictions[i]}\n")
+        file.write(
+            "\n---------------- Difference Between the LSTM Predictions and Final Predictions of {days} days ----------------\n")
+        for i in range(days):
+            actual_value = test.iloc[i] if i < len(test) else "No actual value (out of range)"
+            file.write(
+                f"\n{i} DAY => ACTUAL VALUE : {actual_value} | LSTM PREDICTED VALUE : {predictions[i]} | FINAL PREDICTION(LSTM + ARIMA) : {final_predictions[i]}\n")
+
+        file.write(f"\nTime taken for model training and predictions: {end1 - st1:.2f} seconds\n\n")
+        file.write(f"\n\n---------------- The FORECAST VALUE OF NEXT DATA POINT IS ------------------ \n\n")
+        file.write(f"{predictions[days] + predictions_errors[days]}")
+    print(f"Output written to {os.path.join(Output_address, 'output.txt')}")
+
+def TimeSeriesForecasting():
+    text.delete('1.0', END)
+    text.insert(END, "Time Series Forecasting on PRICE for 6 days.........\n\n")
+    text.insert(END, "\n")
+    LSTMandARIMAModels()
+    file1 = open("future-demand-price/output.txt", "r+")
+    text.insert(END, file1.read())
+    text.insert(END, "\n")
+
+
+
+def RegressionRandomForest():
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+    import pandas as pd
+    from sklearn import model_selection
+    import seaborn as sns;
+    sns.set(font_scale=1.2)
+    bipolarsentiment = pd.read_csv("Myntra-Data/review_final.csv")
+    train_X, test_X, train_Y, test_Y = model_selection.train_test_split(bipolarsentiment['Review'],
+                                                                        bipolarsentiment['Recommended'], test_size=0.1,
+                                                                        random_state=0)
+    df_train90 = pd.DataFrame()
+    df_train90['Review'] = train_X
+    df_train90['Recommended'] = train_Y
+    df_test10 = pd.DataFrame()
+    df_test10['Review'] = test_X
+    df_test10['Recommended'] = test_Y
+    df_train90.to_csv("Myntra-Data\df_train90.csv")
+    df_test10.to_csv("Myntra-Data\df_test10.csv")
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    tfidf_vect_9010 = TfidfVectorizer(max_features=5000)
+    tfidf_vect_9010.fit(bipolarsentiment['Review'])
+    train_X_tfidf_9010 = tfidf_vect_9010.transform(df_train90['Review'])
+    test_X_tfidf_9010 = tfidf_vect_9010.transform(df_test10['Review'])
+    text.delete('1.0', END)
+    text.insert(END, train_X_tfidf_9010);
+    text.insert(END, test_X_tfidf_9010);
+
+
+    model = RandomForestClassifier(criterion='entropy')
+    model.fit(train_X_tfidf_9010, train_Y)
+    predictions_RFR_9010 = model.predict(test_X_tfidf_9010)
+    test_prediction_9010 = pd.DataFrame()
+    test_prediction_9010['Review'] = test_X
+    test_prediction_9010['Recommended'] = predictions_RFR_9010
+    RFR_accuracy_9010 = accuracy_score(predictions_RFR_9010, test_Y) * 100
+    RFR_accuracy = round(RFR_accuracy_9010, 1)
+    text.insert(END, "\nHere is the Accuracy Score: \n");
+    text.insert(END,RFR_accuracy)
+    text.insert(END, "\n")
+    text.insert(END, "\nHere is the Classification report: \n");
+    text.insert(END, classification_report(test_Y, predictions_RFR_9010))
+    text.insert(END, "\n")
+    text.insert(END, "\nHere is the Confusion Matrix: \n");
+    text.insert(END, confusion_matrix(test_Y, predictions_RFR_9010))
+    text.insert(END, "\n")
+def SentimentAnalysis():
+    text.delete('1.0', END)
+    text.insert(END,"\n")
+    text.insert(END, "Loading Myntra Social Media Posts and Reviews....")
+    text.insert(END, "\n")
+    Review_Text_list.clear()
+    train = pd.read_csv(reviewsfilename, encoding='iso-8859-1')
+    text.insert(END, train.head(),"\n")
+    train['Review Text'] = train['Review Text'].astype('str')
+    for i in range(len(train)):
+        tweet = train._get_value(i, 'Review Text')
+        Review_Text_list.append(tweet)
+
+    text.insert(END, "\n\nTotal Customer Reviews found in dataset is : " + str(len(Review_Text_list)) + "\n\n")
+    text.insert(END, "\n")
+    text.insert(END, "....DATA PREPROCESSING STARTED.....")
+    text.insert(END, "\n")
+    clean_list.clear()
+    for i in range(len(Review_Text_list)):
+        tweet = Review_Text_list[i]
+        tweet = tweet.strip("\n")
+        tweet = tweet.strip()
+        tweet = tweetCleaning(tweet.lower())
+        clean_list.append(tweet)
+    res = clean_list[:5]
+    for i in range(len(res)):
+        tweet = res[i]
+        text.insert(END, tweet, "\n")
+    text.insert(END, "\n\nTotal Cleaned Reviews found in dataset is : " + str(len(clean_list)) + "\n\n\n")
+    global pos, neu, neg
+    pos = 0
+    neu = 0
+    neg = 0
+    for i in range(len(clean_list)):
+        tweet = clean_list[i]
+        blob = TextBlob(tweet)
+        if blob.polarity <= 0.2:
+            neg = neg + 1
+            text.insert(END, tweet + "\n")
+            text.insert(END, "Predicted Sentiment : NEGATIVE\n")
+            text.insert(END, "Polarity Score      : " + str(blob.polarity) + "\n")
+            text.insert(END, '==================================================================\n')
+        if blob.polarity > 0.2 and blob.polarity <= 0.5:
+            neu = neu + 1
+            text.insert(END, tweet + "\n")
+            text.insert(END, "Predicted Sentiment : NEUTRAL\n")
+            text.insert(END, "Polarity Score      : " + str(blob.polarity) + "\n")
+            text.insert(END, '==================================================================\n')
+        if blob.polarity > 0.5:
+            pos = pos + 1
+            text.insert(END, tweet + "\n")
+            text.insert(END, "Predicted Sentiment : POSITIVE\n")
+            text.insert(END, "Polarity Score      : " + str(blob.polarity) + "\n")
+            text.insert(END, '==================================================================\n')
+    label_X = []
+    category_X = []
+    text.insert(END, "Saftey Factor\n\n")
+    text.insert(END, 'Positive : ' + str(pos) + "\n")
+    text.insert(END, 'Negative : ' + str(neg) + "\n")
+    text.insert(END, 'Neutral  : ' + str(neu) + "\n\n")
+    text.insert(END, 'Length of tweets  : ' + str(len(clean_list)) + "\n")
+    text.insert(END,
+                'Positive : ' + str(pos) + ' / ' + str(len(clean_list)) + ' = ' + str(pos / len(clean_list)) + '%\n')
+    text.insert(END,
+                'Negative : ' + str(neg) + ' / ' + str(len(clean_list)) + ' = ' + str(neg / len(clean_list)) + '%\n')
+    text.insert(END,
+                'Neutral  : ' + str(neu) + ' / ' + str(len(clean_list)) + ' = ' + str(neu / len(clean_list)) + '%\n')
+    label_X.append('Positive')
+    label_X.append('Negative')
+    label_X.append('Neutral')
+    category_X.append(pos)
+    category_X.append(neg)
+    category_X.append(neu)
+
+    plt.pie(category_X, labels=label_X, autopct='%1.1f%%')
+    plt.title('Sentiment Analysis')
+    plt.axis('equal')
+    plt.show()
+
+
+font = ('times', 16, 'bold')
+title = Label(main,text='OPTIMIZE INVENTORY TREND-DEMAND FORECASTING MANAGEMENT SYSTEM')
+title.config(bg='white', fg='red')
+title.config(font=font)
+title.config(height=3, width=120)
+title.place(x=0, y=5)
+
+font1 = ('times', 14, 'bold')
+upload = Button(main, text="Upload Myntra Social Media Posts and Reviews", command=upload)
+upload.place(x=830, y=100)
+upload.config(font=font1)
+
+
+preprocess = Button(main, text="Data Pre-processing", command=Preprocessing)
+preprocess.place(x=830, y=200)
+preprocess.config(font=font1)
+
+preprocess = Button(main, text="Myntra Sales Data Analytics", command=clothsSalesData)
+preprocess.place(x=830, y=150)
+preprocess.config(font=font1)
+
+model = Button(main, text="Time Series Forecasting [LSTM and ARIMA]", command=TimeSeriesForecasting)
+model.place(x=830, y=250)
+model.config(font=font1)
+
+runcnn = Button(main, text="Regression and Random Forest Algorithm", command=RegressionRandomForest)
+runcnn.place(x=830, y=300)
+runcnn.config(font=font1)
+
+runsvm = Button(main, text="Sentiment Analysis", command=SentimentAnalysis)
+runsvm.place(x=830, y=350)
+runsvm.config(font=font1)
+
+
+font1 = ('times', 12, 'bold')
+text = Text(main, height=30, width=100)
+scroll = Scrollbar(text)
+text.configure(yscrollcommand=scroll.set)
+text.place(x=10, y=100)
+text.config(font=font1)
+
+main.config(bg='brown')
+main.mainloop()
